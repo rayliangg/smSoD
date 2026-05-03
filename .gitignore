@@ -1,0 +1,14 @@
+# Build artifacts (Makefile)
+main
+*.o
+*.a
+*.so
+*.dylib
+
+# Debug symbols (macOS)
+*.dSYM/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~

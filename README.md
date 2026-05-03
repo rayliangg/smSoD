@@ -1,4 +1,4 @@
-# SMSoD (C++)
+# smSoD (C++)
 
 C++17 implementation of **smSoD**
 

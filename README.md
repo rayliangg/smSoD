@@ -1,4 +1,4 @@
-# smSoD (C++)
+# smSoD
 
 C++ implementation of **smSoD**
 

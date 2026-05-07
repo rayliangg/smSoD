@@ -1,6 +1,6 @@
 # smSoD (C++)
 
-C++17 implementation of **smSoD**
+C++ implementation of **smSoD**
 
 **Please cite**
 

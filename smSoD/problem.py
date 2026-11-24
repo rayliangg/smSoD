@@ -1,6 +1,6 @@
 class RidgeProblem:
     # f = sum_i (x_i0 - t_i)^2 + sum_j (x_ij - x_i,j-1)^2, optimum = 0
-    def __init__(self, cfg, xp, rng):
+    def __init__(self, cfg, rng):
         self.m = cfg.m
         self.k = cfg.k
         self.targets = cfg.lower + (cfg.upper - cfg.lower) * rng.random(cfg.m)

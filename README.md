@@ -72,7 +72,7 @@ Kaggle gives about 30 GPU hours per week, and one session runs at most 12 hours.
 
 ```bash
 pip install -r requirements.txt     # numpy==2.3.3
-pip install cupy-cuda12x==13.6.0    # GPU only, needs the CUDA 12 toolkit (NVRTC)
+pip install cupy-cuda12x==13.6.0 fastrlock==0.8.3    # GPU only, needs the CUDA 12 toolkit (NVRTC)
 ```
 
 ```bash
@@ -96,6 +96,7 @@ Each run prints the final error and appends a row to `mk.csv`
 | `--min_bound` | 1e-5 | minimum region width (adapted during the run) |
 | `--lower`, `--upper` | -200, 200 | search range |
 | `--seed` | random | RNG seed |
+| `--gpu_min` | 131072 | CuPy: a step goes to the GPU only if it has at least this many elements |
 | `--output_file` | `mk.csv` | result CSV (`''` disables it) |
 | `--verbose N` | 0 | print progress every N generations |
 | `--group_crossover` | off | experimental: one donor parent per MPM group instead of per subproblem |
@@ -112,10 +113,15 @@ print(res.error, res.nfe, res.seconds)
 ### Benchmark
 
 ```bash
-python benchmark.py                                   # m ∈ {1,2,5,50,100}, k ∈ {2,3,4,5}, 10 runs, both backends
+python benchmark.py                                   # m ∈ {50,100,200}, k ∈ {2,3,4,5}, 5 runs, both backends
 python benchmark.py --backends cupy --runs 3 --max_gen 500
 python benchmark.py --report_only                     # rebuild the table from results/benchmark.csv
+python benchmark.py --workers 4 --gpus 2               # 4 runs at a time, CuPy runs spread over 2 GPUs
 ```
+
+Runs are independent, so the benchmark runs `--workers` of them at the same time (default:
+one per CPU core) and spreads the CuPy runs over all GPUs. The results are the same as
+running them one by one; only the time per run includes sharing the CPU.
 
 Each run is appended to `results/benchmark.csv` straight away, so an interrupted
 benchmark resumes when started again (`--fresh` starts over). When it finishes, the
@@ -123,12 +129,16 @@ table between the `PERFORMANCE` markers below is replaced.
 
 ## Implementation notes
 
-* Every per-individual and per-point loop is a batched array operation. The
-  split-on-demand tree is built level by level for all subproblems at once, and the
-  MPM's candidate merges are scored in one batched pass.
-* Small problems (e.g. `m=5`) are latency-bound: a converged population needs many
-  narrow tree levels per generation, so the GPU pays off mainly for large `m`, `k`
-  and `pop_size`.
+* The algorithm runs on the CPU (NumPy). Every per-individual and per-point loop is a
+  batched array operation; the split-on-demand tree is built level by level for all
+  subproblems at once.
+* The CuPy version is heterogeneous: only steps that are large enough to pay for the GPU
+  launch and transfer are sent to the GPU. These are scoring all pairs of subproblems in
+  the MPM (`m(m-1)/2 x pop_size` work from `m x pop_size` data) and scoring the candidate
+  split points on crowded tree levels. Everything else stays on the CPU, so small problems
+  run at NumPy speed and the GPU helps when `m`, `k` or `pop_size` grow. `--gpu_min` sets
+  the size threshold, and the run prints how many GPU calls it made.
+* NumPy and CuPy give the same result for the same seed.
 
 ## Performance
 

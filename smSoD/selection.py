@@ -1,9 +1,12 @@
-def tournament(fitness, s, rng, xp):
+import numpy as np
+
+
+def tournament(fitness, s, rng):
     N = fitness.shape[0]
     per_shuffle = N // s
     n_shuffle = -(-N // per_shuffle)
 
-    perm = xp.argsort(rng.random((n_shuffle, N)), axis=1)
+    perm = np.argsort(rng.random((n_shuffle, N)), axis=1)
     groups = perm[:, :per_shuffle * s].reshape(-1, s)[:N]
-    best = xp.argmin(fitness[groups], axis=1)
-    return groups[xp.arange(N), best]
+    best = np.argmin(fitness[groups], axis=1)
+    return groups[np.arange(N), best]

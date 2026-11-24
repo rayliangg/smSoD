@@ -3,16 +3,16 @@ import math
 
 import numpy as np
 
-from .backend import to_numpy
-
 DENSE_LIMIT = 1 << 22
 U64_MAX = float(2 ** 64 - 1)
 
 
 class MPMBuilder:
-    def __init__(self, N, xp):
+    def __init__(self, N, gpu=None, gpu_min=1 << 17):
         self.N = N
-        self.xp = xp
+        self.gpu = gpu
+        self.gpu_min = gpu_min
+        self.gpu_calls = 0
         self.log_n1 = math.log2(N + 1.0)
         self.nlogn = N * math.log2(N)
 
@@ -21,18 +21,16 @@ class MPMBuilder:
 
     def pop_cost(self, keys):
         # N * entropy of each row
-        xp = self.xp
         G, N = keys.shape
-        s = xp.sort(keys, axis=1)
-        new = xp.ones((G, N), dtype=bool)
+        s = np.sort(keys, axis=1)
+        new = np.ones((G, N), dtype=bool)
         new[:, 1:] = s[:, 1:] != s[:, :-1]
-        first = xp.nonzero(new.ravel())[0]
-        cnt = xp.diff(xp.concatenate([first, xp.asarray([G * N])])).astype(xp.float64)
-        clogc = xp.bincount(first // N, weights=cnt * xp.log2(cnt), minlength=G)
-        return to_numpy(self.nlogn - clogc)
+        first = np.nonzero(new.ravel())[0]
+        cnt = np.diff(np.append(first, G * N)).astype(np.float64)
+        clogc = np.bincount(first // N, weights=cnt * np.log2(cnt), minlength=G)
+        return self.nlogn - clogc
 
     def pair_pop_cost(self, codes, card, a, b):
-        xp = self.xp
         N = self.N
         out = np.empty(len(a))
         step = max(1, DENSE_LIMIT // N)
@@ -41,24 +39,39 @@ class MPMBuilder:
             ib = b[s:s + step]
             cb = card[ib]
             cells = card[ia] * cb
-            joint = codes[xp.asarray(ia)] * xp.asarray(cb)[:, None] + codes[xp.asarray(ib)]
-            if cells.sum() <= DENSE_LIMIT:
-                end = np.cumsum(cells)
-                key = joint + xp.asarray(end - cells)[:, None]
-                c = xp.bincount(key.ravel(), minlength=int(end[-1]))
-                clogc = xp.log2(c[key].astype(xp.float64)).sum(axis=1)
-                out[s:s + step] = to_numpy(self.nlogn - clogc)
+            if cells.sum() > DENSE_LIMIT:
+                out[s:s + step] = self.pop_cost(codes[ia] * cb[:, None] + codes[ib])
+                continue
+
+            end = np.cumsum(cells)
+            if self.gpu is not None and len(ia) * N >= self.gpu_min:
+                out[s:s + step] = self._pair_gpu(codes, ia, ib, cb, end - cells, int(end[-1]))
             else:
-                out[s:s + step] = self.pop_cost(joint)
+                key = codes[ia] * cb[:, None] + codes[ib] + (end - cells)[:, None]
+                c = np.bincount(key.ravel(), minlength=int(end[-1]))
+                out[s:s + step] = self.nlogn - np.log2(c[key]).sum(axis=1)
         return out
 
+    def _pair_gpu(self, codes, ia, ib, cb, offset, n_cell):
+        # only send the rows we need, the pairs are built on the gpu
+        cp = self.gpu
+        self.gpu_calls += 1
+        rows, inv = np.unique(np.concatenate([ia, ib]), return_inverse=True)
+        inv = inv.ravel()
+        dc = cp.asarray(codes[rows])
+        da = cp.asarray(inv[:len(ia)])
+        db = cp.asarray(inv[len(ia):])
+        key = dc[da] * cp.asarray(cb)[:, None] + dc[db] + cp.asarray(offset)[:, None]
+        c = cp.bincount(key.ravel(), minlength=n_cell)
+        clogc = cp.log2(c[key].astype(cp.float64)).sum(axis=1)
+        return self.nlogn - clogc.get()
+
     def build(self, book):
-        xp = self.xp
         N = self.N
         m = book.local.shape[0]
         cap = 2 * m - 1
 
-        codes = xp.empty((cap, N), dtype=xp.int64)
+        codes = np.empty((cap, N), dtype=np.int64)
         codes[:m] = book.local
         card = np.zeros(cap, dtype=np.int64)
         card[:m] = book.sizes
@@ -89,7 +102,7 @@ class MPMBuilder:
             if not alive[i] or not alive[j]:
                 continue
 
-            u, inv = xp.unique(codes[i] * card[j] + codes[j], return_inverse=True)
+            u, inv = np.unique(codes[i] * card[j] + codes[j], return_inverse=True)
             codes[n] = inv.ravel()
             card[n] = u.size
             table[n] = min(table[i] * table[j], U64_MAX)

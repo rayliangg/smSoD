@@ -26,6 +26,8 @@ def make_parser(backend="auto"):
     p.add_argument("--group_crossover", action="store_true",
                    help="experimental: one donor parent per MPM group")
     p.add_argument("--backend", choices=["auto", "numpy", "cupy"], default=backend)
+    p.add_argument("--gpu_min", type=int, default=d.gpu_min,
+                   help="cupy: only steps with at least this many elements run on the gpu")
     p.add_argument("--output_file", default="mk.csv", help="csv to append the result ('' = no csv)")
     p.add_argument("--verbose", type=int, default=0, metavar="N",
                    help="print every N generations")
@@ -58,7 +60,8 @@ def main(argv=None, backend="auto"):
     print("smSoD  backend=%s  m=%d  k=%d  pop=%d  gens=%d" % (
         name, cfg.m, cfg.k, cfg.pop_size, cfg.max_gen), flush=True)
     res = run(cfg, name, args.verbose)
-    print("error=%.6e  nfe=%d  time=%.2fs  seed=%d" % (res.error, res.nfe, res.seconds, res.seed))
+    print("error=%.6e  nfe=%d  time=%.2fs  seed=%d  gpu calls=%d" % (
+        res.error, res.nfe, res.seconds, res.seed, res.gpu_calls))
 
     if args.output_file:
         save_csv(args.output_file, cfg, res)

@@ -18,6 +18,7 @@ class Config:
     min_bound: float = 1e-5
 
     seed: int = None
+    gpu_min: int = 1 << 17     # use the gpu only when a step has at least this many elements
     group_crossover: bool = False
 
     @property
@@ -33,5 +34,7 @@ class Config:
             raise ValueError("pop_size must be >= 2")
         if self.tour_size < 1 or self.tour_size > self.pop_size:
             raise ValueError("tour_size must be in [1, pop_size]")
+        if self.gpu_min < 0:
+            raise ValueError("gpu_min must be >= 0")
         if self.lower >= self.upper:
             raise ValueError("lower must be < upper")

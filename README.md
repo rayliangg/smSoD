@@ -113,7 +113,7 @@ print(res.error, res.nfe, res.seconds)
 ### Benchmark
 
 ```bash
-python benchmark.py                                   # m ∈ {50,100,200}, k ∈ {2,3,4,5}, 5 runs, both backends
+python benchmark.py                                   # m ∈ {100,200,300}, k ∈ {2,3,4,5}, 5 runs, both backends
 python benchmark.py --backends cupy --runs 3 --max_gen 500
 python benchmark.py --report_only                     # rebuild the table from results/benchmark.csv
 python benchmark.py --workers 4 --gpus 2               # 4 runs at a time, CuPy runs spread over 2 GPUs

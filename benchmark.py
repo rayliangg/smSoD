@@ -34,7 +34,7 @@ def run_one(job):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--m", type=int, nargs="+", default=[50, 100, 200])
+    p.add_argument("--m", type=int, nargs="+", default=[100, 200, 300])
     p.add_argument("--k", type=int, nargs="+", default=[2, 3, 4, 5])
     p.add_argument("--runs", type=int, default=5)
     p.add_argument("--backends", nargs="+", default=["numpy", "cupy"])

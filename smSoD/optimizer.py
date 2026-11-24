@@ -7,6 +7,7 @@ import numpy as np
 from .backend import get_backend
 from .crossover import sample_offspring
 from .discretize import Discretizer
+from .gpu import GPU
 from .mpm import MPMBuilder
 from .problem import RidgeProblem
 from .selection import tournament
@@ -22,16 +23,17 @@ class Result:
         self.best = best
         self.gpu_calls = gpu_calls
 
-    def __repr__(self):
-        return "Result(error=%.6e, nfe=%d, seconds=%.2f, backend=%s, seed=%d, gpu_calls=%d)" % (
-            self.error, self.nfe, self.seconds, self.backend, self.seed, self.gpu_calls)
-
 
 class smSoD:
-    # runs on the cpu, big batched parts go to the gpu if one is given (cupy module)
-    def __init__(self, cfg, gpu=None):
+    # cp = cupy module for the cupy version, None for numpy
+    def __init__(self, cfg, cp=None):
         cfg.check()
+        if cp is None and (cfg.mpm_search != "greedy" or cfg.max_group > 0):
+            raise ValueError("mpm_search=gm and max_group are only in the CuPy version")
         self.cfg = cfg
+        self.gpu = None
+        if cp is not None:
+            self.gpu = GPU(cp, cfg.gpu_min)
         self.rng = np.random.default_rng(cfg.seed)
 
         self.split_rate = cfg.split_rate
@@ -43,12 +45,14 @@ class smSoD:
         self.fitness = np.full(N, np.inf)
 
         self.problem = RidgeProblem(cfg, self.rng)
-        self.discretize = Discretizer(cfg, self.rng, gpu)
-        self.mpm = MPMBuilder(cfg.pop_size, gpu, cfg.gpu_min)
+        self.discretize = Discretizer(cfg, self.rng, self.gpu)
+        self.mpm = MPMBuilder(cfg.pop_size, self.gpu, cfg.mpm_search, cfg.max_group)
 
     @property
     def gpu_calls(self):
-        return self.discretize.gpu_calls + self.mpm.gpu_calls
+        if self.gpu is None:
+            return 0
+        return self.gpu.calls
 
     def evaluate(self):
         self.fitness = self.problem(self.genes)
@@ -104,12 +108,12 @@ class smSoD:
 
 
 def run(cfg, backend="auto", verbose=0):
-    name, gpu = get_backend(backend)
+    name, cp = get_backend(backend)
     cfg = copy.copy(cfg)
     if cfg.seed is None:
         cfg.seed = int.from_bytes(os.urandom(4), "little")
 
     t0 = time.perf_counter()
-    opt = smSoD(cfg, gpu)
+    opt = smSoD(cfg, cp)
     err, best = opt.run(verbose)
     return Result(err, opt.nfe, time.perf_counter() - t0, name, cfg.seed, best, opt.gpu_calls)

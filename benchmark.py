@@ -1,48 +1,22 @@
 import argparse
-import multiprocessing as mp
 import os
 import time
-
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 from smSoD import Config, get_backend, run
 from smSoD import report
 
-warmed = set()
-
-
-def n_gpus():
-    try:
-        import cupy
-        return cupy.cuda.runtime.getDeviceCount()
-    except Exception:
-        return 0
-
-
-def run_one(job):
-    backend, m, k, r, gpu_id, args = job
-    if backend == "cupy":
-        import cupy
-        cupy.cuda.Device(gpu_id).use()
-    if (backend, gpu_id) not in warmed:
-        run(Config(m=2, k=2, pop_size=args.pop_size, max_gen=5, seed=0, gpu_min=0), backend)
-        warmed.add((backend, gpu_id))
-    cfg = Config(m=m, k=k, pop_size=args.pop_size, max_gen=args.max_gen, seed=args.seed + r)
-    return job, run(cfg, backend)
-
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--m", type=int, nargs="+", default=[100, 200, 300])
-    p.add_argument("--k", type=int, nargs="+", default=[2, 3, 4, 5])
+    p.add_argument("--m", type=int, nargs="+", default=[50, 100, 200])
+    p.add_argument("--k", type=int, nargs="+", default=[2, 4, 8])
     p.add_argument("--runs", type=int, default=5)
     p.add_argument("--backends", nargs="+", default=["numpy", "cupy"])
     p.add_argument("--pop_size", type=int, default=200)
     p.add_argument("--max_gen", type=int, default=2000)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--workers", type=int, default=os.cpu_count())
-    p.add_argument("--gpus", type=int, default=None)
+    p.add_argument("--mpm_search", choices=["greedy", "gm"], default="greedy", help="cupy runs only")
+    p.add_argument("--max_group", type=int, default=0, help="cupy runs only")
     p.add_argument("--csv", default="results/benchmark.csv")
     p.add_argument("--readme", default="README.md")
     p.add_argument("--no_readme", action="store_true")
@@ -58,10 +32,6 @@ def main():
             print("skip", b, ":", e)
     backends = sorted(set(backends), key=backends.index)
 
-    gpus = n_gpus() if "cupy" in backends else 0
-    if args.gpus is not None:
-        gpus = min(gpus, args.gpus)
-
     if not args.report_only:
         if args.fresh and os.path.exists(args.csv):
             os.remove(args.csv)
@@ -72,36 +42,34 @@ def main():
             done.add((r["backend"], r["m"], r["k"], r["run"], r["pop_size"], r["max_gen"]))
 
         jobs = []
-        i_gpu = 0
-        for m in sorted(args.m, reverse=True):
-            for k in sorted(args.k, reverse=True):
-                for b in backends:
-                    for r in range(args.runs):
-                        key = (b, str(m), str(k), str(r), str(args.pop_size), str(args.max_gen))
-                        if key in done:
-                            continue
-                        gpu_id = 0
-                        if b == "cupy":
-                            gpu_id = i_gpu % max(gpus, 1)
-                            i_gpu += 1
-                        jobs.append((b, m, k, r, gpu_id, args))
+        for m in args.m:
+            for k in args.k:
+                for r in range(args.runs):
+                    for b in backends:
+                        if (b, str(m), str(k), str(r), str(args.pop_size), str(args.max_gen)) not in done:
+                            jobs.append((b, m, k, r))
+        print("%d runs, %d done before" % (len(jobs), len(done)))
 
-        print("%d runs, %d done before, %d workers, %d gpus" % (len(jobs), len(done), args.workers, gpus))
+        # first cupy call compiles the kernels, don't time it
+        if "cupy" in backends:
+            run(Config(m=4, k=2, max_gen=5, seed=0, gpu_min=0), "cupy")
 
         t0 = time.time()
-        with mp.get_context("spawn").Pool(args.workers) as pool:
-            for i, (job, res) in enumerate(pool.imap_unordered(run_one, jobs)):
-                b, m, k, r, gpu_id = job[:5]
-                report.append_row(args.csv, {
-                    "backend": b, "m": m, "k": k, "run": r, "seed": args.seed + r,
-                    "pop_size": args.pop_size, "max_gen": args.max_gen,
-                    "error": "%.16e" % res.error, "nfe": res.nfe, "seconds": "%.4f" % res.seconds,
-                    "gpu_calls": res.gpu_calls, "workers": args.workers,
-                })
-                left = (time.time() - t0) / (i + 1) * (len(jobs) - i - 1)
-                dev = "gpu%d" % gpu_id if b == "cupy" else "cpu"
-                print("[%d/%d] %s %s m=%d k=%d run=%d error=%.3e %.1fs (%.0f min left)" % (
-                    i + 1, len(jobs), b, dev, m, k, r, res.error, res.seconds, left / 60), flush=True)
+        for i, (b, m, k, r) in enumerate(jobs):
+            cfg = Config(m=m, k=k, pop_size=args.pop_size, max_gen=args.max_gen, seed=args.seed + r)
+            if b == "cupy":
+                cfg.mpm_search = args.mpm_search
+                cfg.max_group = args.max_group
+            res = run(cfg, b)
+            report.append_row(args.csv, {
+                "backend": b, "m": m, "k": k, "run": r, "seed": cfg.seed,
+                "pop_size": args.pop_size, "max_gen": args.max_gen,
+                "error": "%.16e" % res.error, "nfe": res.nfe, "seconds": "%.4f" % res.seconds,
+                "gpu_calls": res.gpu_calls,
+            })
+            left = (time.time() - t0) / (i + 1) * (len(jobs) - i - 1)
+            print("[%d/%d] %s m=%d k=%d run=%d error=%.3e %.1fs gpu_calls=%d (%.0f min left)" % (
+                i + 1, len(jobs), b, m, k, r, res.error, res.seconds, res.gpu_calls, left / 60), flush=True)
         print("total %.1f min" % ((time.time() - t0) / 60))
 
     rows = report.load_rows(args.csv)

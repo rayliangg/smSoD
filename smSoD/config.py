@@ -18,8 +18,10 @@ class Config:
     min_bound: float = 1e-5
 
     seed: int = None
-    gpu_min: int = 1 << 17     # use the gpu only when a step has at least this many elements
+    gpu_min: int = 1 << 16     # use the gpu only when a step has at least this many elements
     group_crossover: bool = False
+    mpm_search: str = "greedy"    # cupy only: greedy or gm (greedy mating)
+    max_group: int = 0             # cupy only: max subproblems in one MPM group, 0 = no limit
 
     @property
     def length(self):
@@ -36,5 +38,9 @@ class Config:
             raise ValueError("tour_size must be in [1, pop_size]")
         if self.gpu_min < 0:
             raise ValueError("gpu_min must be >= 0")
+        if self.mpm_search not in ("greedy", "gm"):
+            raise ValueError("mpm_search must be greedy or gm")
+        if self.max_group < 0:
+            raise ValueError("max_group must be >= 0")
         if self.lower >= self.upper:
             raise ValueError("lower must be < upper")

@@ -25,6 +25,11 @@ def make_parser(backend="auto"):
     p.add_argument("--seed", type=int, default=None, help="random if not given")
     p.add_argument("--group_crossover", action="store_true",
                    help="experimental: one donor parent per MPM group")
+    if backend != "numpy":
+        p.add_argument("--mpm_search", choices=["greedy", "gm"], default=d.mpm_search,
+                       help="CuPy only, gm = greedy mating search (Shao & Yu 2013)")
+        p.add_argument("--max_group", type=int, default=d.max_group,
+                       help="CuPy only, max subproblems in one MPM group, 0 = no limit")
     p.add_argument("--backend", choices=["auto", "numpy", "cupy"], default=backend)
     p.add_argument("--gpu_min", type=int, default=d.gpu_min,
                    help="cupy: only steps with at least this many elements run on the gpu")
@@ -49,11 +54,13 @@ def save_csv(path, cfg, res):
 def main(argv=None, backend="auto"):
     args = make_parser(backend).parse_args(argv)
     names = [f.name for f in fields(Config)]
-    cfg = Config(**{n: getattr(args, n) for n in names})
+    cfg = Config(**{n: getattr(args, n) for n in names if hasattr(args, n)})
 
     try:
         cfg.check()
         name, _ = get_backend(args.backend)
+        if name == "numpy" and (cfg.mpm_search != "greedy" or cfg.max_group > 0):
+            raise ValueError("--mpm_search gm and --max_group are only in the CuPy version")
     except (ValueError, RuntimeError) as e:
         sys.exit("error: %s" % e)
 

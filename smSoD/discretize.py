@@ -18,16 +18,12 @@ class Discretizer:
         self.cfg = cfg
         self.rng = rng
         self.gpu = gpu
-        self.gpu_calls = 0
         k = cfg.k
         self.K = 1 << k
         self.pow2 = np.left_shift(1, np.arange(k, dtype=np.int64))
         self.pow2f = self.pow2.astype(np.float64)
         self.bit = np.arange(k, dtype=np.int64)
         self.trial_id = np.arange(N_TRIAL, dtype=np.int64)
-        if gpu is not None:
-            self.d_pow2f = gpu.asarray(self.pow2f)
-            self.d_trial_id = gpu.asarray(self.trial_id)
 
     def pack(self, bits):
         if self.cfg.k <= 52:
@@ -38,10 +34,11 @@ class Discretizer:
         # for every (region, trial): size of the most crowded orthant
         n, k = X.shape
         G = R * N_TRIAL
-        if (self.gpu is not None and n * N_TRIAL * k >= self.cfg.gpu_min
-                and G * self.K <= DENSE_LIMIT and k <= 52):
-            return self._trial_score_gpu(X, trial, reg, G)
+        if self.gpu is not None and n * N_TRIAL * k >= self.cfg.gpu_min and G * self.K <= DENSE_LIMIT:
+            return self.gpu.trial_score(X, trial, reg, G, self.K)
+        return self.trial_score_cpu(X, trial, reg, G)
 
+    def trial_score_cpu(self, X, trial, reg, G):
         mask = self.pack(X[:, None, :] > trial[reg])
         group = reg[:, None] * N_TRIAL + self.trial_id
         if G * self.K <= DENSE_LIMIT:
@@ -55,18 +52,6 @@ class Discretizer:
         out = np.zeros(G, dtype=np.int64)
         np.maximum.at(out, key // U, cnt)
         return out
-
-    def _trial_score_gpu(self, X, trial, reg, G):
-        cp = self.gpu
-        self.gpu_calls += 1
-        dX = cp.asarray(X)
-        dt = cp.asarray(trial)
-        dreg = cp.asarray(reg)
-        bits = (dX[:, None, :] > dt[dreg]).astype(cp.float64)
-        mask = (bits @ self.d_pow2f).astype(cp.int64)
-        key = (dreg[:, None] * N_TRIAL + self.d_trial_id) * self.K + mask
-        cnt = cp.bincount(key.ravel(), minlength=G * self.K)
-        return cnt.reshape(G, self.K).max(axis=1).get()
 
     def group_children(self, region, mask, n_region):
         # points with the same (region, orthant) go to the same child

@@ -6,7 +6,7 @@ import sys
 import numpy as np
 
 FIELDS = ["backend", "m", "k", "run", "seed", "pop_size", "max_gen", "error", "nfe", "seconds",
-          "gpu_calls", "workers"]
+          "gpu_calls"]
 START = "<!-- PERFORMANCE:START -->"
 END = "<!-- PERFORMANCE:END -->"
 
@@ -38,7 +38,7 @@ def machine_info(backends):
             if line.startswith("model name"):
                 cpu = line.split(":")[1].strip()
                 break
-    info.append("CPU: %s (%d cores)" % (cpu, os.cpu_count()))
+    info.append("CPU: " + cpu)
 
     if "cupy" in backends:
         import cupy as cp
@@ -46,7 +46,7 @@ def machine_info(backends):
         if isinstance(name, bytes):
             name = name.decode()
         info.append("CuPy " + cp.__version__)
-        info.append("GPU: %s x%d" % (name, cp.cuda.runtime.getDeviceCount()))
+        info.append("GPU: " + name)
     return info
 
 
@@ -89,9 +89,7 @@ def make_table(rows, pop_size, max_gen, info):
     text = ("`pop_size=%d`, `max_gen=%d` (NFE = %d per run). Error is the best fitness "
             "at the end of a run (optimum = 0). Speedup = NumPy time / CuPy time."
             % (pop_size, max_gen, pop_size * max_gen))
-    workers = max(int(r.get("workers") or 1) for r in rows) if rows else 1
-    if workers > 1:
-        text += " %d runs were run at the same time, so the time per run includes sharing the CPU." % workers
+    text += " Runs were executed one at a time."
 
     out = [text, ""]
     if info:

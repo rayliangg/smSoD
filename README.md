@@ -60,8 +60,9 @@ smSoD/
    File → Import Notebook**, and paste the GitHub link of `smSoD_kaggle.ipynb`).
 2. In **Settings**, set **Accelerator** to *GPU T4 x2* or *GPU P100* and turn **Internet** on
    (Internet needs a phone-verified account).
-3. Run the cells from top to bottom. The notebook installs NumPy 2.3.3, CuPy 13.6.0 and
-   NVRTC 12.9 (CuPy needs it to compile kernels and the Kaggle image does not have it).
+3. Run the cells from top to bottom. The notebook replaces Kaggle's CuPy with CuPy 13.6.0
+   (CUDA 12) and installs the CUDA 12 NVRTC / cuBLAS / cuRAND libraries from pip, since the
+   Kaggle image only ships CUDA 13.
 4. For the full benchmark use **Save Version → Save & Run All (Commit)** so it runs in the
    background. The updated `README.md` and `benchmark.csv` appear in the **Output** tab.
 

@@ -4,6 +4,7 @@ Python code of smSoD (ECGA with multidimensional split-on-demand discretization)
 There are two versions: NumPy (CPU) and CuPy (GPU).
 
 [![Open in Kaggle](https://kaggle.com/static/images/open-in-kaggle.svg)](https://kaggle.com/kernels/welcome?src=https://github.com/rayliangg/smSoD/blob/main/smSoD_kaggle.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rayliangg/smSoD/blob/main/smSoD_colab.ipynb)
 
 ## Citation
 
@@ -76,6 +77,15 @@ CuPy version only:
 
 Kaggle stops a run after 12 hours. If the benchmark is too long, run `numpy` and `cupy` in
 two versions, put both csv files together and run `python benchmark.py --report_only`.
+
+## Colab
+
+1. Open `smSoD_colab.ipynb` on Colab (badge above).
+2. Runtime -> Change runtime type -> T4 GPU.
+3. Run the cells in order. For the full benchmark set `USE_DRIVE = True` in the settings cell,
+   then the csv is saved to Google Drive after every run and the benchmark cell can be run
+   again after a disconnect.
+4. The last cell downloads `benchmark.csv` and `README.md`.
 
 ## Benchmark
 

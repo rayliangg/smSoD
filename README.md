@@ -60,7 +60,8 @@ smSoD/
    File → Import Notebook**, and paste the GitHub link of `smSoD_kaggle.ipynb`).
 2. In **Settings**, set **Accelerator** to *GPU T4 x2* or *GPU P100* and turn **Internet** on
    (Internet needs a phone-verified account).
-3. Run the cells from top to bottom. The notebook installs NumPy 2.3.3 and CuPy 13.6.0.
+3. Run the cells from top to bottom. The notebook installs NumPy 2.3.3, CuPy 13.6.0 and
+   NVRTC 12.9 (CuPy needs it to compile kernels and the Kaggle image does not have it).
 4. For the full benchmark use **Save Version → Save & Run All (Commit)** so it runs in the
    background. The updated `README.md` and `benchmark.csv` appear in the **Output** tab.
 
@@ -70,7 +71,7 @@ Kaggle gives about 30 GPU hours per week, and one session runs at most 12 hours.
 
 ```bash
 pip install -r requirements.txt     # numpy==2.3.3
-pip install cupy-cuda12x==13.6.0    # GPU only
+pip install cupy-cuda12x==13.6.0    # GPU only, needs the CUDA 12 toolkit (NVRTC)
 ```
 
 ```bash

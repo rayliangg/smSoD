@@ -8,7 +8,7 @@ def get_backend(name="auto"):
     if name in ("auto", "cupy"):
         try:
             import cupy as cp
-            cp.zeros(1).sum().item()
+            (cp.random.RandomState(0).random_sample(4) * 2.0).sum().item()
             return "cupy", cp
         except Exception as e:
             if name == "cupy":

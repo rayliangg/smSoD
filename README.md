@@ -1,12 +1,19 @@
 # smSoD
 
-C++ implementation of **smSoD**
+Python implementation of **smSoD**: the extended compact genetic algorithm (ECGA)
+with multidimensional split-on-demand discretization for real-valued optimization.
+The same code runs on **NumPy (CPU)** and **CuPy (GPU)**.
 
-**Please cite**
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rayliangg/smSoD/blob/main/smSoD_colab.ipynb)
 
-Che-Wei Liang and Tian-Li Yu, “Novel Discretization Scheme for Multidimensional Split-on-Demand on Real-Valued Optimization with High Multi-modality,” in *Proc. International Joint Conference on Computational Intelligence*, Springer, 2025, pp. 281–294.
+## Citation
 
-BibTeX:
+If you use this code, please cite:
+
+Che-Wei Liang and Tian-Li Yu, “Novel Discretization Scheme for Multidimensional
+Split-on-Demand on Real-Valued Optimization with High Multi-modality,” in
+*Proc. International Joint Conference on Computational Intelligence*, Springer,
+2025, pp. 281–294.
 
 ```bibtex
 @inproceedings{liang2025novel,
@@ -19,11 +26,106 @@ BibTeX:
 }
 ```
 
-```bash
-make && ./main --m 5 --k 2
+## Files
+
+| File | Purpose |
+|---|---|
+| `main.py` | Run smSoD, uses CuPy if a GPU is available, otherwise NumPy |
+| `smSoD_numpy.py` | NumPy (CPU) version |
+| `smSoD_cupy.py` | CuPy (GPU) version |
+| `benchmark.py` | Runs the m × k grid on both backends and writes the Performance table below |
+| `smSoD_colab.ipynb` | Ready-to-run Google Colab notebook |
+| `requirements.txt` | Library versions |
+| `smSoD/` | The package (see below) |
+
+```
+smSoD/
+├── config.py       parameters of a run
+├── backend.py      NumPy / CuPy switch and random numbers
+├── problem.py      test function (separable chained ridge)
+├── selection.py    tournament selection
+├── discretize.py   multidimensional split-on-demand -> codebook
+├── mpm.py          marginal product model (greedy MDL merge)
+├── crossover.py    sample offspring from the codebook
+├── optimizer.py    main loop, run()
+├── cli.py          command line options
+└── report.py       benchmark table -> README
 ```
 
-`--m` / `--k` set subproblem count and block size (`len = m*k`). More options live in `parameter.*`. Results append to `../mk.csv` by default.
+## How to run
+
+### Google Colab
+
+Click the badge above, choose **Runtime → Change runtime type → GPU**, then run the
+cells from top to bottom. The notebook installs NumPy 2.3.3 and CuPy 13.6.0.
+
+### Locally
+
+```bash
+pip install -r requirements.txt     # numpy==2.3.3
+pip install cupy-cuda12x==13.6.0    # GPU only
+```
+
+```bash
+python smSoD_numpy.py --m 5 --k 2
+python smSoD_cupy.py  --m 5 --k 2
+python main.py        --m 50 --k 4 --verbose 100   # CuPy if a GPU is usable, else NumPy
+```
+
+`--m` is the number of subproblems and `--k` the block size (problem length = `m*k`).
+Each run prints the final error and appends a row to `mk.csv`
+(`m,k,length,mode,eva_fun,seed,error,backend,seconds`).
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--m`, `--k` | 5, 2 | subproblem count and size (`1 ≤ k ≤ 62`) |
+| `--pop_size` | 200 | population size |
+| `--max_gen` | 2000 | generations (NFE = `pop_size × max_gen`) |
+| `--tour_size` | 8 | tournament size |
+| `--cross_prob` | 0.975 | fraction of offspring; the rest are elites |
+| `--split_rate`, `--decrease_rate` | 0.5, 0.998 | stop splitting below `pop_size × split_rate` points; decay per generation |
+| `--min_bound` | 1e-5 | minimum region width (adapted during the run) |
+| `--lower`, `--upper` | -200, 200 | search range |
+| `--seed` | random | RNG seed |
+| `--output_file` | `mk.csv` | result CSV (`''` disables it) |
+| `--verbose N` | 0 | print progress every N generations |
+| `--group_crossover` | off | experimental: one donor parent per MPM group instead of per subproblem |
+
+As a library:
+
+```python
+from smSoD import Config, run
+
+res = run(Config(m=5, k=2, seed=1), backend="cupy")   # or "numpy" / "auto"
+print(res.error, res.nfe, res.seconds)
+```
+
+### Benchmark
+
+```bash
+python benchmark.py                                   # m ∈ {1,2,5,50,100}, k ∈ {2,3,4,5}, 10 runs, both backends
+python benchmark.py --backends cupy --runs 3 --max_gen 500
+python benchmark.py --report_only                     # rebuild the table from results/benchmark.csv
+```
+
+Each run is appended to `results/benchmark.csv` straight away, so an interrupted
+benchmark resumes when started again (`--fresh` starts over). When it finishes, the
+table between the `PERFORMANCE` markers below is replaced.
+
+## Implementation notes
+
+* Every per-individual and per-point loop is a batched array operation. The
+  split-on-demand tree is built level by level for all subproblems at once, and the
+  MPM's candidate merges are scored in one batched pass.
+* Small problems (e.g. `m=5`) are latency-bound: a converged population needs many
+  narrow tree levels per generation, so the GPU pays off mainly for large `m`, `k`
+  and `pop_size`.
+
+## Performance
+
+<!-- PERFORMANCE:START -->
+Not generated yet. Run `python benchmark.py` (or the Colab notebook) to fill in this table.
+<!-- PERFORMANCE:END -->
 
 ## License
 

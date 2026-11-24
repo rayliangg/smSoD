@@ -1,14 +1,6 @@
-# Build artifacts (Makefile)
-main
-*.o
-*.a
-*.so
-*.dylib
-
-# Debug symbols (macOS)
-*.dSYM/
-
-# Editor / OS
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.csv
+!results/*.csv
 .DS_Store
-*.swp
-*~

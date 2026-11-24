@@ -4,7 +4,7 @@ Python implementation of **smSoD**: the extended compact genetic algorithm (ECGA
 with multidimensional split-on-demand discretization for real-valued optimization.
 The same code runs on **NumPy (CPU)** and **CuPy (GPU)**.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rayliangg/smSoD/blob/main/smSoD_colab.ipynb)
+[![Open in Kaggle](https://kaggle.com/static/images/open-in-kaggle.svg)](https://kaggle.com/kernels/welcome?src=https://github.com/rayliangg/smSoD/blob/main/smSoD_kaggle.ipynb)
 
 ## Citation
 
@@ -34,7 +34,7 @@ Split-on-Demand on Real-Valued Optimization with High Multi-modality,” in
 | `smSoD_numpy.py` | NumPy (CPU) version |
 | `smSoD_cupy.py` | CuPy (GPU) version |
 | `benchmark.py` | Runs the m × k grid on both backends and writes the Performance table below |
-| `smSoD_colab.ipynb` | Ready-to-run Google Colab notebook |
+| `smSoD_kaggle.ipynb` | Ready-to-run Kaggle notebook (free GPU) |
 | `requirements.txt` | Library versions |
 | `smSoD/` | The package (see below) |
 
@@ -54,10 +54,17 @@ smSoD/
 
 ## How to run
 
-### Google Colab
+### Kaggle (free GPU)
 
-Click the badge above, choose **Runtime → Change runtime type → GPU**, then run the
-cells from top to bottom. The notebook installs NumPy 2.3.3 and CuPy 13.6.0.
+1. Click the **Open in Kaggle** badge above (or on Kaggle: **Create → New Notebook →
+   File → Import Notebook**, and paste the GitHub link of `smSoD_kaggle.ipynb`).
+2. In **Settings**, set **Accelerator** to *GPU T4 x2* or *GPU P100* and turn **Internet** on
+   (Internet needs a phone-verified account).
+3. Run the cells from top to bottom. The notebook installs NumPy 2.3.3 and CuPy 13.6.0.
+4. For the full benchmark use **Save Version → Save & Run All (Commit)** so it runs in the
+   background. The updated `README.md` and `benchmark.csv` appear in the **Output** tab.
+
+Kaggle gives about 30 GPU hours per week, and one session runs at most 12 hours.
 
 ### Locally
 
@@ -124,7 +131,7 @@ table between the `PERFORMANCE` markers below is replaced.
 ## Performance
 
 <!-- PERFORMANCE:START -->
-Not generated yet. Run `python benchmark.py` (or the Colab notebook) to fill in this table.
+Not generated yet. Run `python benchmark.py` (or the Kaggle notebook) to fill in this table.
 <!-- PERFORMANCE:END -->
 
 ## License

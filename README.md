@@ -93,8 +93,9 @@ two versions, put both csv files together and run `python benchmark.py --report_
 python benchmark.py --m 50 100 200 --k 2 4 8 --runs 5
 ```
 
-Runs are done one by one and saved to `results/benchmark.csv` after each run, so it can be
-stopped and started again. At the end the table below is updated.
+`os.cpu_count()` runs are done at the same time (`--workers` to change it), the CuPy runs
+share the one GPU. Every run is saved to `results/benchmark.csv` when it finishes, so it can
+be stopped and started again. At the end the table below is updated.
 `--report_only` only rebuilds the table, `--fresh` starts from an empty csv.
 
 ## Code

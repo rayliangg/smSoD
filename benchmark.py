@@ -1,9 +1,29 @@
 import argparse
+import multiprocessing as mp
 import os
 import time
 
+# every worker uses one thread
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 from smSoD import Config, get_backend, run
 from smSoD import report
+
+warmed = set()
+
+
+def run_one(job):
+    b, m, k, r, args = job
+    if b == "cupy" and b not in warmed:
+        # first cupy call compiles the kernels, don't time it
+        run(Config(m=4, k=2, max_gen=5, seed=0, gpu_min=0), "cupy")
+        warmed.add(b)
+    cfg = Config(m=m, k=k, pop_size=args.pop_size, max_gen=args.max_gen, seed=args.seed + r)
+    if b == "cupy":
+        cfg.mpm_search = args.mpm_search
+        cfg.max_group = args.max_group
+    return job, run(cfg, b)
 
 
 def main():
@@ -15,6 +35,7 @@ def main():
     p.add_argument("--pop_size", type=int, default=200)
     p.add_argument("--max_gen", type=int, default=2000)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--workers", type=int, default=os.cpu_count(), help="runs at the same time")
     p.add_argument("--mpm_search", choices=["greedy", "gm"], default="greedy", help="cupy runs only")
     p.add_argument("--max_group", type=int, default=0, help="cupy runs only")
     p.add_argument("--csv", default="results/benchmark.csv")
@@ -42,34 +63,27 @@ def main():
             done.add((r["backend"], r["m"], r["k"], r["run"], r["pop_size"], r["max_gen"]))
 
         jobs = []
-        for m in args.m:
+        for m in sorted(args.m, reverse=True):    # big ones first
             for k in args.k:
                 for r in range(args.runs):
                     for b in backends:
                         if (b, str(m), str(k), str(r), str(args.pop_size), str(args.max_gen)) not in done:
-                            jobs.append((b, m, k, r))
-        print("%d runs, %d done before" % (len(jobs), len(done)))
-
-        # first cupy call compiles the kernels, don't time it
-        if "cupy" in backends:
-            run(Config(m=4, k=2, max_gen=5, seed=0, gpu_min=0), "cupy")
+                            jobs.append((b, m, k, r, args))
+        print("%d runs, %d done before, %d at the same time" % (len(jobs), len(done), args.workers))
 
         t0 = time.time()
-        for i, (b, m, k, r) in enumerate(jobs):
-            cfg = Config(m=m, k=k, pop_size=args.pop_size, max_gen=args.max_gen, seed=args.seed + r)
-            if b == "cupy":
-                cfg.mpm_search = args.mpm_search
-                cfg.max_group = args.max_group
-            res = run(cfg, b)
-            report.append_row(args.csv, {
-                "backend": b, "m": m, "k": k, "run": r, "seed": cfg.seed,
-                "pop_size": args.pop_size, "max_gen": args.max_gen,
-                "error": "%.16e" % res.error, "nfe": res.nfe, "seconds": "%.4f" % res.seconds,
-                "gpu_calls": res.gpu_calls,
-            })
-            left = (time.time() - t0) / (i + 1) * (len(jobs) - i - 1)
-            print("[%d/%d] %s m=%d k=%d run=%d error=%.3e %.1fs gpu_calls=%d (%.0f min left)" % (
-                i + 1, len(jobs), b, m, k, r, res.error, res.seconds, res.gpu_calls, left / 60), flush=True)
+        with mp.get_context("spawn").Pool(args.workers) as pool:
+            for i, (job, res) in enumerate(pool.imap_unordered(run_one, jobs)):
+                b, m, k, r = job[:4]
+                report.append_row(args.csv, {
+                    "backend": b, "m": m, "k": k, "run": r, "seed": args.seed + r,
+                    "pop_size": args.pop_size, "max_gen": args.max_gen,
+                    "error": "%.16e" % res.error, "nfe": res.nfe, "seconds": "%.4f" % res.seconds,
+                    "gpu_calls": res.gpu_calls,
+                })
+                left = (time.time() - t0) / (i + 1) * (len(jobs) - i - 1)
+                print("[%d/%d] %s m=%d k=%d run=%d error=%.3e %.1fs gpu_calls=%d (%.0f min left)" % (
+                    i + 1, len(jobs), b, m, k, r, res.error, res.seconds, res.gpu_calls, left / 60), flush=True)
         print("total %.1f min" % ((time.time() - t0) / 60))
 
     rows = report.load_rows(args.csv)
@@ -77,7 +91,7 @@ def main():
         print("no results in", args.csv)
         return
     used = set(r["backend"] for r in rows) & set(backends)
-    table = report.make_table(rows, args.pop_size, args.max_gen, report.machine_info(used))
+    table = report.make_table(rows, args.pop_size, args.max_gen, report.machine_info(used), args.workers)
     print(table)
     if not args.no_readme:
         report.update_readme(args.readme, table)

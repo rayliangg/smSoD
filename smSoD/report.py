@@ -38,7 +38,7 @@ def machine_info(backends):
             if line.startswith("model name"):
                 cpu = line.split(":")[1].strip()
                 break
-    info.append("CPU: " + cpu)
+    info.append("CPU: %s (%d cores)" % (cpu, os.cpu_count()))
 
     if "cupy" in backends:
         import cupy as cp
@@ -55,7 +55,7 @@ def mean_std(x):
     return x.mean(), x.std()
 
 
-def make_table(rows, pop_size, max_gen, info):
+def make_table(rows, pop_size, max_gen, info, workers=1):
     rows = [r for r in rows if int(r["pop_size"]) == pop_size and int(r["max_gen"]) == max_gen]
     backends = [b for b in ["numpy", "cupy"] if any(r["backend"] == b for r in rows)]
     title = {"numpy": "NumPy", "cupy": "CuPy"}
@@ -89,7 +89,10 @@ def make_table(rows, pop_size, max_gen, info):
     text = ("`pop_size=%d`, `max_gen=%d` (NFE = %d per run). Error is the best fitness "
             "at the end of a run (optimum = 0). Speedup = NumPy time / CuPy time."
             % (pop_size, max_gen, pop_size * max_gen))
-    text += " Runs were executed one at a time."
+    if workers > 1:
+        text += " %d runs were run at the same time, the time per run includes sharing the CPU and GPU." % workers
+    else:
+        text += " Runs were run one at a time."
 
     out = [text, ""]
     if info:
